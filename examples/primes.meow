@@ -1,0 +1,15 @@
+var count = 0;
+for (var i = 2; i <= 20; i = i + 1) {
+    var isPrime = 1;
+    for (var j = 2; j * j <= i; j = j + 1) {
+        if (i % j == 0) {
+            isPrime = 0;
+        }
+    }
+    if (isPrime == 1) {
+        print(i);
+        count = count + 1;
+    }
+}
+print("Found primes:");
+print(count);
