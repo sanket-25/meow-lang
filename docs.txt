@@ -1,0 +1,13 @@
+#include <meow.h>
+
+int main(){
+    meow("Hello World!");
+
+    int a = 5;
+    deci b = 7.8;
+    bool c = false;
+    string d = "cat";
+    char e = 'x';
+    
+    return 0;
+}

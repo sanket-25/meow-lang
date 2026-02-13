@@ -1,0 +1,13 @@
+meow << "Hello world";
+
+int x = 10;
+deci y = 3.14;
+bool flag = true;
+char c = 'A';
+string name = "MeowLang";
+
+int result = (x + 5) * 2;
+
+if (x > 5) {
+    meow << name;
+}
