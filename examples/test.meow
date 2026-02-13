@@ -1,1 +1,4 @@
 meow<<"Hello Meow";
+int x = 44;
+
+meow<<x;
