@@ -10,4 +10,5 @@ add_executable(meow
     src/token.cpp
     src/parser.cpp
     src/compiler.cpp
+    src/vm.cpp
 )
