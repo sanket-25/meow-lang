@@ -1,0 +1,8 @@
+Package: meow-lang
+Version: 1.0
+Section: base
+Priority: optional
+Architecture: amd64
+Maintainer: Sanket Dhuri | sanket@plasmax.tech
+Description: MeowLang programming language - A custom stack-based VM programming language built from scratch
+  MeowLang is a custom stack-based VM programming language built from scratch. It is designed to be simple, efficient, and easy to learn, making it an ideal choice for developers looking to create high-performance applications. With its intuitive syntax and powerful features, MeowLang allows developers to write code that is both concise and expressive, while also providing the performance benefits of a low-level language. Whether you're a seasoned developer or just getting started with programming, MeowLang is a great choice for your next project.

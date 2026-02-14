@@ -1,0 +1,22 @@
+name: meow-lang
+base: core22
+version: '1.0'
+summary: MeowLang programming language
+description: |
+  MeowLang is a custom stack-based VM programming language
+  built from scratch in C++.
+
+grade: stable
+confinement: strict
+
+apps:
+  meow:
+    command: usr/bin/meow
+    plugs:
+      - home
+      - removable-media
+
+parts:
+  meow:
+    plugin: dump
+    source: meow-lang

@@ -1,0 +1,4 @@
+meow<<"Hello Meow";
+
+int a = 66;
+meow<<a+7;
