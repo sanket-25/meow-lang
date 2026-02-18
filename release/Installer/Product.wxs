@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="Meow Language"
+           Language="1033"
+           Version="1.0.0"
+           Manufacturer="MeowLang"
+           UpgradeCode="PUT-GUID-HERE">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"/>
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+
+    <MediaTemplate />
+
+    <Feature Id="ProductFeature" Title="Meow" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="MeowLang">
+          <Component Id="MeowExe" Guid="PUT-GUID-HERE">
+            <File Source="release\bin\meow.exe" KeyPath="yes"/>
+            <Environment Id="AddToPath"
+                         Name="PATH"
+                         Value="[INSTALLFOLDER]"
+                         Permanent="no"
+                         Part="last"
+                         Action="set"
+                         System="yes"/>
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents">
+      <ComponentRef Id="MeowExe" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

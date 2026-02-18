@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <Product
+      Id="*"
+      Name="Meow Programming Language"
+      Language="1033"
+      Version="1.0.0"
+      Manufacturer="MeowLang"
+      UpgradeCode="288be421-86d9-4749-a7be-897e4efb0a00">
+
+    <Package
+        InstallerVersion="500"
+        Compressed="yes"
+        InstallScope="perMachine" />
+
+    <MajorUpgrade
+        DowngradeErrorMessage="A newer version of Meow is already installed." />
+
+    <MediaTemplate />
+
+    <!-- 👇 THIS ENABLES PROFESSIONAL INSTALLER UI -->
+    <UIRef Id="WixUI_InstallDir"/>
+    <UIRef Id="WixUI_ErrorProgressText"/>
+
+    <!-- 👇 Defines install folder for UI -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
+
+    <Feature Id="MainFeature" Title="Meow" Level="1">
+      <ComponentRef Id="MeowExeComponent"/>
+    </Feature>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+  <Directory Id="ProgramFiles64Folder">
+    <Directory Id="INSTALLFOLDER" Name="MeowLang">
+      <Component Id="MeowExeComponent"
+                 Guid="e932559e-2494-4701-9369-baf4eb2d08a9"
+                 Win64="yes">
+
+        <File Source="bin\meow.exe" KeyPath="yes"/>
+
+        <Environment
+            Id="AddToPath"
+            Name="PATH"
+            Value="[INSTALLFOLDER]"
+            Permanent="no"
+            Part="last"
+            Action="set"/>
+
+      </Component>
+    </Directory>
+  </Directory>
+</Directory>
+
+
+  </Product>
+
+</Wix>
