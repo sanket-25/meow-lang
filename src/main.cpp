@@ -10,14 +10,19 @@
 
 namespace {
 const char* kVersion = "meowlang 1.0.0";
+#ifdef _WIN32
+const char* kBinaryName = "meow.exe";
+#else
+const char* kBinaryName = "meow";
+#endif
 
 void printUsage() {
     std::cout << "Usage:\n"
-              << "  meow <file.meow>\n"
-              << "  meow run <file.meow>\n"
-              << "  meow repl\n"
-              << "  meow --version\n"
-              << "  meow --help\n";
+              << "  " << kBinaryName << " <file.meow>\n"
+              << "  " << kBinaryName << " run <file.meow>\n"
+              << "  " << kBinaryName << " repl\n"
+              << "  " << kBinaryName << " --version\n"
+              << "  " << kBinaryName << " --help\n";
 }
 
 std::string readFile(const std::string& path) {

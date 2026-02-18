@@ -1,4 +1,5 @@
-meow<<"Hello Meow";
+int a = 6;
+int b = 7;
 
-int a = 66;
-meow<<a+7;
+int c = a+b;
+meow<<c;
