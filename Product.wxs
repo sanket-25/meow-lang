@@ -13,46 +13,66 @@
     <Package
         InstallerVersion="500"
         Compressed="yes"
-        InstallScope="perMachine" />
+        InstallScope="perMachine"
+        Platform="x64" />
 
     <MajorUpgrade
         DowngradeErrorMessage="A newer version of Meow is already installed." />
 
     <MediaTemplate />
 
-    <!-- 👇 THIS ENABLES PROFESSIONAL INSTALLER UI -->
+    <!-- ========== BRANDING ========== -->
+
+    <WixVariable Id="WixUIBannerBmp" Value="installer-assets\banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="installer-assets\dialog.bmp" />
+    <WixVariable Id="WixUILicenseRtf" Value="installer-assets\license.rtf" />
+
+    <!-- Programs & Features Info -->
+    <Property Id="ARPCOMMENTS" Value="The Meow Programming Language - Fast, Simple, Playful." />
+    <Property Id="ARPURLINFOABOUT" Value="https://meowlang.org" />
+    <Property Id="ARPPRODUCTICON" Value="meow.ico" />
+
+    <Icon Id="meow.ico" SourceFile="installer-assets\meow.ico"/>
+
+    <!-- ========== UI WIZARD ========== -->
+
     <UIRef Id="WixUI_InstallDir"/>
     <UIRef Id="WixUI_ErrorProgressText"/>
 
-    <!-- 👇 Defines install folder for UI -->
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER"/>
 
-    <Feature Id="MainFeature" Title="Meow" Level="1">
+    <!-- ========== FEATURES ========== -->
+
+    <Feature Id="MainFeature" Title="Meow Programming Language" Level="1">
       <ComponentRef Id="MeowExeComponent"/>
     </Feature>
 
+    <!-- ========== DIRECTORY STRUCTURE ========== -->
+
     <Directory Id="TARGETDIR" Name="SourceDir">
-  <Directory Id="ProgramFiles64Folder">
-    <Directory Id="INSTALLFOLDER" Name="MeowLang">
-      <Component Id="MeowExeComponent"
-                 Guid="e932559e-2494-4701-9369-baf4eb2d08a9"
-                 Win64="yes">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="MeowLang">
 
-        <File Source="bin\meow.exe" KeyPath="yes"/>
+          <Component Id="MeowExeComponent"
+                     Guid="e932559e-2494-4701-9369-baf4eb2d08a9"
+                     Win64="yes">
 
-        <Environment
-            Id="AddToPath"
-            Name="PATH"
-            Value="[INSTALLFOLDER]"
-            Permanent="no"
-            Part="last"
-            Action="set"/>
+            <File Source="bin\meow.exe" KeyPath="yes"/>
 
-      </Component>
+            <!-- Add to PATH -->
+            <Environment
+                Id="AddToPath"
+                Name="PATH"
+                Value="[INSTALLFOLDER]"
+                Permanent="no"
+                Part="last"
+                Action="set"/>
+
+          </Component>
+
+        </Directory>
+      </Directory>
     </Directory>
-  </Directory>
-</Directory>
-
 
   </Product>
 
