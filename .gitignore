@@ -1,5 +1,5 @@
 build/
-*.exe
+# *.exe
 meow
 dist/
 *.zip

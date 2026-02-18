@@ -33,27 +33,6 @@ cmake --build build
 .\build\meow.exe examples\hello.meow
 ```
 
-PowerShell does not execute binaries from the current directory unless you prefix with `.\`.
-
-- Works in current folder:
-
-	```
-	.\meow.exe examples\hello.meow
-	```
-
-- To run `meow` from anywhere, install it to your User PATH:
-
-	```
-	powershell -ExecutionPolicy Bypass -File scripts/install_windows.ps1
-	```
-
-	Then open a **new** terminal and run:
-
-	```
-	meow --version
-	meow examples\hello.meow
-	```
-
 ## Public release (GitHub)
 
 1. Ensure generated binaries are not tracked in git:
