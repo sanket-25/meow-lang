@@ -1,4 +1,9 @@
 build/
 *.exe
-# meow
+meow
+dist/
+*.zip
+*.tar.gz
+*.deb
+*.snap
 credentials.txt
