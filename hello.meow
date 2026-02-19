@@ -1,8 +1,7 @@
-int a = 6;
-int b = 9;
+int a = 2;
+int b = 3;
 
-meow<<"Hello world";
+int c = a + b;
+meow<<c;
 
-if(a<b){
-    meow<<"2";
-}
+meow<<"Hello World!";
