@@ -6,4 +6,4 @@ dist/
 *.tar.gz
 *.deb
 *.snap
-credentials.txt
+# credentials.txt
