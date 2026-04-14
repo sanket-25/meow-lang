@@ -65,6 +65,10 @@ Virtual Machine
 Output
 ```
 
+<img width="2364" height="1735" alt="image" src="https://github.com/user-attachments/assets/b77c2e6f-4709-4cde-941c-6a778a8a398a" />
+<img width="563" height="815" alt="image" src="https://github.com/user-attachments/assets/86708ce6-5106-4e2c-b72f-ce02050dbec9" />
+
+
 ### ⚠️ Current Limitations
 
 - Global VM state (variables persist across runs)
