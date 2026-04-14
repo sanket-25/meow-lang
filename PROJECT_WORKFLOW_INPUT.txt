@@ -1,0 +1,1386 @@
+MEOWLANG PROJECT WORKFLOW INPUT
+Generated: 2026-04-14
+
+============================================================
+1) DIRECTORY STRUCTURE (TOP LEVEL)
+============================================================
+.github/
+bin/
+build/
+examples/
+installer-assets/
+linux/
+release/
+scripts/
+src/
+.gitignore
+cab1.cab
+CMakeLists.txt
+credentials.txt
+hello.meow
+meow
+meow.bat
+meow.exe
+meowlang-1.0.0-windows-x64.msi
+meowlang-1.0.0-windows-x64.wixpdb
+Product.wixobj
+Product.wxs
+ReadMe.md
+steps.txt
+
+
+============================================================
+2) MAIN SOURCE FILES (COPY-PASTE)
+============================================================
+
+-------------------- FILE: src/main.cpp --------------------
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include "lexer.h"
+#include "parser.h"
+#include "compiler.h"
+#include "vm.h"
+
+namespace {
+const char* kVersion = "meowlang 1.0.0";
+#ifdef _WIN32
+const char* kBinaryName = "meow.exe";
+#else
+const char* kBinaryName = "meow";
+#endif
+
+void printUsage() {
+    std::cout << "Usage:\n"
+              << "  " << kBinaryName << " <file.meow>\n"
+              << "  " << kBinaryName << " run <file.meow>\n"
+              << "  " << kBinaryName << " repl\n"
+              << "  " << kBinaryName << " --version\n"
+              << "  " << kBinaryName << " --help\n";
+}
+
+std::string readFile(const std::string& path) {
+    std::ifstream file(path);
+    if (!file) {
+        throw std::runtime_error("Could not open file: " + path);
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+std::vector<Instruction> compileSource(const std::string& source) {
+    Lexer lexer(source);
+    auto tokens = lexer.tokenize();
+
+    Parser parser(tokens);
+    auto ast = parser.parse();
+
+    Compiler compiler;
+    return compiler.compile(ast);
+}
+
+int runFile(VM& vm, const std::string& path) {
+    try {
+        auto bytecode = compileSource(readFile(path));
+        vm.loadProgram(bytecode);
+        vm.run();
+        return 0;
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+        return 1;
+    }
+}
+
+int runRepl(VM& vm) {
+    std::cout << "MeowLang REPL. Type 'exit' to quit.\n";
+    std::string line;
+    while (true) {
+        std::cout << "meow> ";
+        if (!std::getline(std::cin, line)) {
+            std::cout << "\n";
+            break;
+        }
+        if (line == "exit" || line == "quit") {
+            break;
+        }
+        if (line.empty()) {
+            continue;
+        }
+        try {
+            auto bytecode = compileSource(line);
+            vm.loadProgram(bytecode);
+            vm.run();
+        } catch (const std::exception& ex) {
+            std::cerr << "Error: " << ex.what() << "\n";
+        }
+    }
+    return 0;
+}
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printUsage();
+        return 1;
+    }
+
+    std::string command = argv[1];
+    VM vm;
+
+    if (command == "--help" || command == "-h") {
+        printUsage();
+        return 0;
+    }
+
+    if (command == "--version") {
+        std::cout << kVersion << "\n";
+        return 0;
+    }
+
+    if (command == "repl") {
+        return runRepl(vm);
+    }
+
+    if (command == "run") {
+        if (argc < 3) {
+            std::cerr << "Error: missing file path.\n";
+            printUsage();
+            return 1;
+        }
+        return runFile(vm, argv[2]);
+    }
+
+    return runFile(vm, command);
+}
+
+-------------------- FILE: src/token.h --------------------
+#ifndef TOKEN_H
+#define TOKEN_H
+
+#include <string>
+
+enum class TokenType {
+    // Keywords
+    MEOW,
+    INT,
+    DECI,
+    BOOL,
+    CHAR,
+    STRING,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+
+    // Identifiers
+    IDENTIFIER,
+
+    // Literals
+    INTEGER_LITERAL,
+    DECIMAL_LITERAL,
+    STRING_LITERAL,
+    CHAR_LITERAL,
+
+    // Operators
+    PLUS, MINUS, STAR, SLASH, MOD,
+    ASSIGN,
+    EQUAL_EQUAL, NOT_EQUAL,
+    LESS, GREATER, LESS_EQUAL, GREATER_EQUAL,
+    AND, OR, NOT,
+    SHIFT_LEFT,
+
+    // Symbols
+    LPAREN, RPAREN,
+    LBRACE, RBRACE,
+    SEMICOLON,
+
+    END_OF_FILE,
+    UNKNOWN
+};
+
+struct Token {
+    TokenType type;
+    std::string value;
+    int line;
+
+    Token(TokenType t, std::string v, int l)
+        : type(t), value(v), line(l) {}
+};
+
+#endif
+
+-------------------- FILE: src/lexer.h --------------------
+#ifndef LEXER_H
+#define LEXER_H
+
+#include "token.h"
+#include <string>
+#include <vector>
+
+class Lexer {
+private:
+    std::string source;
+    size_t pos;
+    int line;
+
+    char peek() const;
+    char advance();
+    void skipWhitespace();
+    Token identifier();
+    Token number();
+    Token stringLiteral();
+    Token charLiteral();
+
+public:
+    explicit Lexer(const std::string& src);
+    std::vector<Token> tokenize();
+};
+
+#endif
+
+-------------------- FILE: src/lexer.cpp --------------------
+#include "lexer.h"
+#include <cctype>
+#include <unordered_map>
+
+Lexer::Lexer(const std::string& src)
+    : source(src), pos(0), line(1) {}
+
+char Lexer::peek() const {
+    if (pos >= source.length()) return '\0';
+    return source[pos];
+}
+
+char Lexer::advance() {
+    if (pos >= source.length()) return '\0';
+    return source[pos++];
+}
+
+void Lexer::skipWhitespace() {
+    while (std::isspace(static_cast<unsigned char>(peek()))) {
+        if (peek() == '\n') line++;
+        advance();
+    }
+}
+
+Token Lexer::identifier() {
+    std::string value;
+    while (std::isalnum(static_cast<unsigned char>(peek())) || peek() == '_') {
+        value += advance();
+    }
+
+    static const std::unordered_map<std::string, TokenType> keywords = {
+        {"meow", TokenType::MEOW},
+        {"int", TokenType::INT},
+        {"deci", TokenType::DECI},
+        {"bool", TokenType::BOOL},
+        {"char", TokenType::CHAR},
+        {"string", TokenType::STRING},
+        {"true", TokenType::TRUE},
+        {"false", TokenType::FALSE},
+        {"if", TokenType::IF},
+        {"else", TokenType::ELSE}
+    };
+
+    auto it = keywords.find(value);
+    if (it != keywords.end()) {
+        return Token(it->second, value, line);
+    }
+
+    return Token(TokenType::IDENTIFIER, value, line);
+}
+
+Token Lexer::number() {
+    std::string value;
+    bool isDecimal = false;
+
+    while (std::isdigit(static_cast<unsigned char>(peek())) || peek() == '.') {
+        if (peek() == '.') {
+            if (isDecimal) break;
+            isDecimal = true;
+        }
+        value += advance();
+    }
+
+    if (isDecimal) {
+        return Token(TokenType::DECIMAL_LITERAL, value, line);
+    }
+
+    return Token(TokenType::INTEGER_LITERAL, value, line);
+}
+
+Token Lexer::stringLiteral() {
+    std::string value;
+    advance(); // skip opening quote
+
+    while (peek() != '"' && peek() != '\0') {
+        if (peek() == '\n') line++;
+        value += advance();
+    }
+
+    if (peek() == '"') {
+        advance(); // closing quote
+    }
+
+    return Token(TokenType::STRING_LITERAL, value, line);
+}
+
+Token Lexer::charLiteral() {
+    std::string value;
+    advance(); // skip opening quote
+
+    if (peek() != '\0' && peek() != '\n') {
+        value += advance();
+    }
+
+    if (peek() == '\'') {
+        advance(); // closing quote
+    }
+
+    return Token(TokenType::CHAR_LITERAL, value, line);
+}
+
+std::vector<Token> Lexer::tokenize() {
+    std::vector<Token> tokens;
+
+    while (pos < source.length()) {
+        skipWhitespace();
+        char c = peek();
+
+        if (c == '\0') break;
+
+        if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
+            tokens.push_back(identifier());
+        } else if (std::isdigit(static_cast<unsigned char>(c))) {
+            tokens.push_back(number());
+        } else {
+            switch (c) {
+                case '+':
+                    tokens.emplace_back(TokenType::PLUS, "+", line);
+                    advance();
+                    break;
+                case '-':
+                    tokens.emplace_back(TokenType::MINUS, "-", line);
+                    advance();
+                    break;
+                case '*':
+                    tokens.emplace_back(TokenType::STAR, "*", line);
+                    advance();
+                    break;
+                case '/':
+                    tokens.emplace_back(TokenType::SLASH, "/", line);
+                    advance();
+                    break;
+                case '%':
+                    tokens.emplace_back(TokenType::MOD, "%", line);
+                    advance();
+                    break;
+
+                case '=':
+                    advance();
+                    if (peek() == '=') {
+                        advance();
+                        tokens.emplace_back(TokenType::EQUAL_EQUAL, "==", line);
+                    } else {
+                        tokens.emplace_back(TokenType::ASSIGN, "=", line);
+                    }
+                    break;
+
+                case '!':
+                    advance();
+                    if (peek() == '=') {
+                        advance();
+                        tokens.emplace_back(TokenType::NOT_EQUAL, "!=", line);
+                    } else {
+                        tokens.emplace_back(TokenType::NOT, "!", line);
+                    }
+                    break;
+
+                case '<':
+                    advance();
+                    if (peek() == '<') {
+                        advance();
+                        tokens.emplace_back(TokenType::SHIFT_LEFT, "<<", line);
+                    } else if (peek() == '=') {
+                        advance();
+                        tokens.emplace_back(TokenType::LESS_EQUAL, "<=", line);
+                    } else {
+                        tokens.emplace_back(TokenType::LESS, "<", line);
+                    }
+                    break;
+
+                case '>':
+                    advance();
+                    if (peek() == '=') {
+                        advance();
+                        tokens.emplace_back(TokenType::GREATER_EQUAL, ">=", line);
+                    } else {
+                        tokens.emplace_back(TokenType::GREATER, ">", line);
+                    }
+                    break;
+
+                case '&':
+                    advance();
+                    if (peek() == '&') {
+                        advance();
+                        tokens.emplace_back(TokenType::AND, "&&", line);
+                    } else {
+                        tokens.emplace_back(TokenType::UNKNOWN, "&", line);
+                    }
+                    break;
+
+                case '|':
+                    advance();
+                    if (peek() == '|') {
+                        advance();
+                        tokens.emplace_back(TokenType::OR, "||", line);
+                    } else {
+                        tokens.emplace_back(TokenType::UNKNOWN, "|", line);
+                    }
+                    break;
+
+                case '(':
+                    tokens.emplace_back(TokenType::LPAREN, "(", line);
+                    advance();
+                    break;
+
+                case ')':
+                    tokens.emplace_back(TokenType::RPAREN, ")", line);
+                    advance();
+                    break;
+
+                case '{':
+                    tokens.emplace_back(TokenType::LBRACE, "{", line);
+                    advance();
+                    break;
+
+                case '}':
+                    tokens.emplace_back(TokenType::RBRACE, "}", line);
+                    advance();
+                    break;
+
+                case ';':
+                    tokens.emplace_back(TokenType::SEMICOLON, ";", line);
+                    advance();
+                    break;
+
+                case '"':
+                    tokens.push_back(stringLiteral());
+                    break;
+
+                case '\'':
+                    tokens.push_back(charLiteral());
+                    break;
+
+                default:
+                    tokens.emplace_back(TokenType::UNKNOWN, std::string(1, c), line);
+                    advance();
+                    break;
+            }
+        }
+    }
+
+    tokens.emplace_back(TokenType::END_OF_FILE, "EOF", line);
+    return tokens;
+}
+
+-------------------- FILE: src/ast.h --------------------
+#ifndef AST_H
+#define AST_H
+
+#include <memory>
+#include <string>
+#include <vector>
+
+class ASTNode {
+public:
+    virtual ~ASTNode() = default;
+};
+
+using ASTNodePtr = std::shared_ptr<ASTNode>;
+
+
+// ================= EXPRESSIONS =================
+
+class Expression : public ASTNode {
+};
+
+using ExprPtr = std::shared_ptr<Expression>;
+
+class LiteralExpr : public Expression {
+public:
+    std::string value;
+    explicit LiteralExpr(const std::string& val) : value(val) {}
+};
+
+class VariableExpr : public Expression {
+public:
+    std::string name;
+    explicit VariableExpr(const std::string& n) : name(n) {}
+};
+
+class BinaryExpr : public Expression {
+public:
+    ExprPtr left;
+    std::string op;
+    ExprPtr right;
+
+    BinaryExpr(ExprPtr l, const std::string& o, ExprPtr r)
+        : left(std::move(l)), op(o), right(std::move(r)) {}
+};
+
+class UnaryExpr : public Expression {
+public:
+    std::string op;
+    ExprPtr right;
+
+    UnaryExpr(const std::string& o, ExprPtr r)
+        : op(o), right(std::move(r)) {}
+};
+
+
+// ================= STATEMENTS =================
+
+class Statement : public ASTNode {
+};
+
+using StmtPtr = std::shared_ptr<Statement>;
+
+class PrintStmt : public Statement {
+public:
+    ExprPtr expression;
+    explicit PrintStmt(ExprPtr expr) : expression(std::move(expr)) {}
+};
+
+class VarDeclStmt : public Statement {
+public:
+    std::string type;
+    std::string name;
+    ExprPtr initializer;
+
+    VarDeclStmt(const std::string& t, const std::string& n, ExprPtr init)
+        : type(t), name(n), initializer(std::move(init)) {}
+};
+
+class ExprStmt : public Statement {
+public:
+    ExprPtr expression;
+    explicit ExprStmt(ExprPtr expr) : expression(std::move(expr)) {}
+};
+
+class BlockStmt : public Statement {
+public:
+    std::vector<StmtPtr> statements;
+};
+
+class IfStmt : public Statement {
+public:
+    ExprPtr condition;
+    StmtPtr thenBranch;
+
+    IfStmt(ExprPtr cond, StmtPtr thenB)
+        : condition(std::move(cond)), thenBranch(std::move(thenB)) {}
+};
+
+#endif
+
+-------------------- FILE: src/parser.h --------------------
+#ifndef PARSER_H
+#define PARSER_H
+
+#include "ast.h"
+#include "token.h"
+#include <vector>
+
+class Parser {
+private:
+    std::vector<Token> tokens;
+    int current;
+
+    Token peek();
+    Token previous();
+    bool match(TokenType type);
+    bool check(TokenType type);
+    Token advance();
+    bool isAtEnd();
+
+    // parsing
+    StmtPtr declaration();
+    StmtPtr statement();
+    StmtPtr printStatement();
+    StmtPtr ifStatement();
+    StmtPtr block();
+    StmtPtr varDeclaration();
+
+    ExprPtr expression();
+    ExprPtr assignment();
+    ExprPtr logicalOr();
+    ExprPtr logicalAnd();
+    ExprPtr equality();
+    ExprPtr comparison();
+    ExprPtr term();
+    ExprPtr factor();
+    ExprPtr unary();
+    ExprPtr primary();
+
+public:
+    explicit Parser(const std::vector<Token>& t);
+    std::vector<StmtPtr> parse();
+};
+
+#endif
+
+-------------------- FILE: src/parser.cpp --------------------
+#include "parser.h"
+#include <stdexcept>
+#include <string>
+
+Parser::Parser(const std::vector<Token>& t)
+    : tokens(t), current(0) {}
+
+Token Parser::peek() { return tokens[current]; }
+Token Parser::previous() { return tokens[current - 1]; }
+bool Parser::isAtEnd() { return peek().type == TokenType::END_OF_FILE; }
+
+Token Parser::advance() {
+    if (!isAtEnd()) current++;
+    return previous();
+}
+
+bool Parser::check(TokenType type) {
+    if (isAtEnd()) return false;
+    return peek().type == type;
+}
+
+bool Parser::match(TokenType type) {
+    if (check(type)) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+
+// ================= PARSE ENTRY =================
+
+std::vector<StmtPtr> Parser::parse() {
+    std::vector<StmtPtr> statements;
+    while (!isAtEnd()) {
+        statements.push_back(declaration());
+    }
+    return statements;
+}
+
+
+// ================= DECLARATIONS =================
+
+StmtPtr Parser::declaration() {
+    if (match(TokenType::INT) ||
+        match(TokenType::DECI) ||
+        match(TokenType::BOOL) ||
+        match(TokenType::CHAR) ||
+        match(TokenType::STRING)) {
+
+        return varDeclaration();
+    }
+
+    return statement();
+}
+
+StmtPtr Parser::varDeclaration() {
+    std::string type = previous().value;
+
+    Token name = advance(); // identifier
+
+    ExprPtr initializer = nullptr;
+
+    if (match(TokenType::ASSIGN)) {
+        initializer = expression();
+    }
+
+    match(TokenType::SEMICOLON);
+
+    return std::make_shared<VarDeclStmt>(type, name.value, initializer);
+}
+
+
+// ================= STATEMENTS =================
+
+StmtPtr Parser::statement() {
+    if (match(TokenType::MEOW))
+        return printStatement();
+
+    if (match(TokenType::IF))
+        return ifStatement();
+
+    if (match(TokenType::LBRACE))
+        return block();
+
+    return std::make_shared<ExprStmt>(expression());
+}
+
+StmtPtr Parser::printStatement() {
+    match(TokenType::SHIFT_LEFT);
+    ExprPtr value = expression();
+    match(TokenType::SEMICOLON);
+    return std::make_shared<PrintStmt>(value);
+}
+
+StmtPtr Parser::ifStatement() {
+    match(TokenType::LPAREN);
+    ExprPtr condition = expression();
+    match(TokenType::RPAREN);
+
+    StmtPtr thenBranch = statement();
+    return std::make_shared<IfStmt>(condition, thenBranch);
+}
+
+StmtPtr Parser::block() {
+    auto blockStmt = std::make_shared<BlockStmt>();
+
+    while (!check(TokenType::RBRACE) && !isAtEnd()) {
+        blockStmt->statements.push_back(declaration());
+    }
+
+    match(TokenType::RBRACE);
+    return blockStmt;
+}
+
+
+// ================= EXPRESSIONS =================
+
+ExprPtr Parser::expression() {
+    return assignment();
+}
+
+ExprPtr Parser::assignment() {
+    ExprPtr expr = logicalOr();
+
+    if (match(TokenType::ASSIGN)) {
+        ExprPtr value = assignment();
+        return std::make_shared<BinaryExpr>(expr, "=", value);
+    }
+
+    return expr;
+}
+
+ExprPtr Parser::logicalOr() {
+    ExprPtr expr = logicalAnd();
+    while (match(TokenType::OR)) {
+        std::string op = previous().value;
+        ExprPtr right = logicalAnd();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::logicalAnd() {
+    ExprPtr expr = equality();
+    while (match(TokenType::AND)) {
+        std::string op = previous().value;
+        ExprPtr right = equality();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::equality() {
+    ExprPtr expr = comparison();
+    while (match(TokenType::EQUAL_EQUAL) || match(TokenType::NOT_EQUAL)) {
+        std::string op = previous().value;
+        ExprPtr right = comparison();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::comparison() {
+    ExprPtr expr = term();
+    while (match(TokenType::LESS) || match(TokenType::GREATER) ||
+           match(TokenType::LESS_EQUAL) || match(TokenType::GREATER_EQUAL)) {
+        std::string op = previous().value;
+        ExprPtr right = term();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::term() {
+    ExprPtr expr = factor();
+    while (match(TokenType::PLUS) || match(TokenType::MINUS)) {
+        std::string op = previous().value;
+        ExprPtr right = factor();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::factor() {
+    ExprPtr expr = unary();
+    while (match(TokenType::STAR) || match(TokenType::SLASH) || match(TokenType::MOD)) {
+        std::string op = previous().value;
+        ExprPtr right = unary();
+        expr = std::make_shared<BinaryExpr>(expr, op, right);
+    }
+    return expr;
+}
+
+ExprPtr Parser::unary() {
+    if (match(TokenType::NOT) || match(TokenType::MINUS)) {
+        std::string op = previous().value;
+        ExprPtr right = unary();
+        return std::make_shared<UnaryExpr>(op, right);
+    }
+    return primary();
+}
+
+ExprPtr Parser::primary() {
+    if (match(TokenType::INTEGER_LITERAL) ||
+        match(TokenType::DECIMAL_LITERAL) ||
+        match(TokenType::STRING_LITERAL) ||
+        match(TokenType::CHAR_LITERAL) ||
+        match(TokenType::TRUE) ||
+        match(TokenType::FALSE)) {
+
+        return std::make_shared<LiteralExpr>(previous().value);
+    }
+
+    if (match(TokenType::IDENTIFIER)) {
+        return std::make_shared<VariableExpr>(previous().value);
+    }
+
+    if (match(TokenType::LPAREN)) {
+        ExprPtr expr = expression();
+        match(TokenType::RPAREN);
+        return expr;
+    }
+
+    throw std::runtime_error("Unexpected token at line " + std::to_string(peek().line));
+}
+
+-------------------- FILE: src/bytecode.h --------------------
+#ifndef BYTECODE_H
+#define BYTECODE_H
+
+#include <string>
+#include <vector>
+
+enum class OpCode {
+    LOAD_CONST,
+    LOAD_VAR,
+    STORE_VAR,
+
+    ADD,
+    SUB,
+    MUL,
+    DIV,
+    MOD,
+
+    NEG,
+    NOT,
+
+    EQUAL,
+    NOT_EQUAL,
+    LESS,
+    LESS_EQUAL,
+    GREATER,
+    GREATER_EQUAL,
+
+    AND,
+    OR,
+
+    PRINT,
+
+    JUMP,
+    JUMP_IF_FALSE,
+
+    HALT
+};
+
+struct Instruction {
+    OpCode op;
+    std::string operand;
+
+    Instruction(OpCode o, const std::string& opd = "")
+        : op(o), operand(opd) {}
+};
+
+#endif
+
+-------------------- FILE: src/compiler.cpp --------------------
+#include "compiler.h"
+#include <memory>
+
+std::vector<Instruction> Compiler::compile(const std::vector<StmtPtr>& statements) {
+    instructions.clear();
+    instructions.reserve(statements.size() * 2);
+
+    for (const auto& stmt : statements) {
+        compileStatement(stmt);
+    }
+
+    instructions.emplace_back(OpCode::HALT);
+    return instructions;
+}
+
+
+// ================= STATEMENTS =================
+
+void Compiler::compileStatement(const StmtPtr& stmt) {
+    if (auto printStmt = std::dynamic_pointer_cast<PrintStmt>(stmt)) {
+        compileExpression(printStmt->expression);
+        instructions.emplace_back(OpCode::PRINT);
+    }
+    else if (auto varDecl = std::dynamic_pointer_cast<VarDeclStmt>(stmt)) {
+        if (varDecl->initializer) {
+            compileExpression(varDecl->initializer);
+            instructions.emplace_back(OpCode::STORE_VAR, varDecl->name);
+        }
+    }
+    else if (auto exprStmt = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
+        compileExpression(exprStmt->expression);
+    }
+    else if (auto blockStmt = std::dynamic_pointer_cast<BlockStmt>(stmt)) {
+        for (const auto& s : blockStmt->statements) {
+            compileStatement(s);
+        }
+    }
+    else if (auto ifStmt = std::dynamic_pointer_cast<IfStmt>(stmt)) {
+        compileExpression(ifStmt->condition);
+
+        int jumpIndex = static_cast<int>(instructions.size());
+        instructions.emplace_back(OpCode::JUMP_IF_FALSE, "0");
+
+        compileStatement(ifStmt->thenBranch);
+
+        instructions[jumpIndex].operand =
+            std::to_string(instructions.size());
+    }
+}
+
+
+// ================= EXPRESSIONS =================
+
+void Compiler::compileExpression(const ExprPtr& expr) {
+    if (auto literal = std::dynamic_pointer_cast<LiteralExpr>(expr)) {
+        instructions.emplace_back(OpCode::LOAD_CONST, literal->value);
+    }
+    else if (auto variable = std::dynamic_pointer_cast<VariableExpr>(expr)) {
+        instructions.emplace_back(OpCode::LOAD_VAR, variable->name);
+    }
+    else if (auto binary = std::dynamic_pointer_cast<BinaryExpr>(expr)) {
+        if (binary->op == "=") {
+            compileExpression(binary->right);
+            auto target = std::dynamic_pointer_cast<VariableExpr>(binary->left);
+            if (target) {
+                instructions.emplace_back(OpCode::STORE_VAR, target->name);
+            }
+            return;
+        }
+
+        compileExpression(binary->left);
+        compileExpression(binary->right);
+
+        if (binary->op == "+") instructions.emplace_back(OpCode::ADD);
+        else if (binary->op == "-") instructions.emplace_back(OpCode::SUB);
+        else if (binary->op == "*") instructions.emplace_back(OpCode::MUL);
+        else if (binary->op == "/") instructions.emplace_back(OpCode::DIV);
+        else if (binary->op == "%") instructions.emplace_back(OpCode::MOD);
+        else if (binary->op == "==") instructions.emplace_back(OpCode::EQUAL);
+        else if (binary->op == "!=") instructions.emplace_back(OpCode::NOT_EQUAL);
+        else if (binary->op == "<") instructions.emplace_back(OpCode::LESS);
+        else if (binary->op == "<=") instructions.emplace_back(OpCode::LESS_EQUAL);
+        else if (binary->op == ">") instructions.emplace_back(OpCode::GREATER);
+        else if (binary->op == ">=") instructions.emplace_back(OpCode::GREATER_EQUAL);
+        else if (binary->op == "&&") instructions.emplace_back(OpCode::AND);
+        else if (binary->op == "||") instructions.emplace_back(OpCode::OR);
+    }
+    else if (auto unary = std::dynamic_pointer_cast<UnaryExpr>(expr)) {
+        compileExpression(unary->right);
+
+        if (unary->op == "-") instructions.emplace_back(OpCode::NEG);
+        else if (unary->op == "!") instructions.emplace_back(OpCode::NOT);
+    }
+}
+
+-------------------- FILE: src/vm.cpp --------------------
+#include "vm.h"
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
+
+VM::VM()
+    : ip(0) {}
+
+VM::VM(const std::vector<Instruction>& instr)
+    : instructions(instr), ip(0) {}
+
+void VM::loadProgram(const std::vector<Instruction>& instr) {
+    instructions = instr;
+    ip = 0;
+    stack.clear();
+}
+
+void VM::push(const std::string& value) {
+    stack.push_back(value);
+}
+
+std::string VM::pop() {
+    if (stack.empty()) {
+        throw std::runtime_error("VM stack underflow");
+    }
+    std::string value = stack.back();
+    stack.pop_back();
+    return value;
+}
+
+double VM::toNumber(const std::string& value) {
+    return std::stod(value);
+}
+
+bool VM::toBool(const std::string& value) {
+    if (value == "true") return true;
+    if (value == "false") return false;
+    return std::stod(value) != 0.0;
+}
+
+void VM::run() {
+    while (ip < static_cast<int>(instructions.size())) {
+        const Instruction& instr = instructions[ip];
+
+        switch (instr.op) {
+            case OpCode::LOAD_CONST:
+                push(instr.operand);
+                break;
+            case OpCode::LOAD_VAR:
+                push(variables[instr.operand]);
+                break;
+            case OpCode::STORE_VAR: {
+                std::string value = pop();
+                variables[instr.operand] = value;
+                break;
+            }
+            case OpCode::ADD: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(std::to_string(a + b));
+                break;
+            }
+            case OpCode::SUB: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(std::to_string(a - b));
+                break;
+            }
+            case OpCode::MUL: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(std::to_string(a * b));
+                break;
+            }
+            case OpCode::DIV: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(std::to_string(a / b));
+                break;
+            }
+            case OpCode::MOD: {
+                int b = std::stoi(pop());
+                int a = std::stoi(pop());
+                push(std::to_string(a % b));
+                break;
+            }
+            case OpCode::NEG: {
+                double a = toNumber(pop());
+                push(std::to_string(-a));
+                break;
+            }
+            case OpCode::NOT: {
+                bool a = toBool(pop());
+                push(a ? "false" : "true");
+                break;
+            }
+            case OpCode::EQUAL: {
+                std::string b = pop();
+                std::string a = pop();
+                push(a == b ? "true" : "false");
+                break;
+            }
+            case OpCode::NOT_EQUAL: {
+                std::string b = pop();
+                std::string a = pop();
+                push(a != b ? "true" : "false");
+                break;
+            }
+            case OpCode::LESS: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(a < b ? "true" : "false");
+                break;
+            }
+            case OpCode::LESS_EQUAL: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(a <= b ? "true" : "false");
+                break;
+            }
+            case OpCode::GREATER: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(a > b ? "true" : "false");
+                break;
+            }
+            case OpCode::GREATER_EQUAL: {
+                double b = toNumber(pop());
+                double a = toNumber(pop());
+                push(a >= b ? "true" : "false");
+                break;
+            }
+            case OpCode::AND: {
+                bool b = toBool(pop());
+                bool a = toBool(pop());
+                push((a && b) ? "true" : "false");
+                break;
+            }
+            case OpCode::OR: {
+                bool b = toBool(pop());
+                bool a = toBool(pop());
+                push((a || b) ? "true" : "false");
+                break;
+            }
+            case OpCode::PRINT:
+                std::cout << pop() << std::endl;
+                break;
+            case OpCode::JUMP:
+                ip = std::stoi(instr.operand);
+                continue;
+            case OpCode::JUMP_IF_FALSE: {
+                bool condition = toBool(pop());
+                if (!condition) {
+                    ip = std::stoi(instr.operand);
+                    continue;
+                }
+                break;
+            }
+            case OpCode::HALT:
+                return;
+        }
+
+        ip++;
+    }
+}
+
+
+============================================================
+3) DOCUMENTATION (COPY-PASTE)
+============================================================
+
+-------------------- FILE: ReadMe.md --------------------
+# MeowLang
+
+A tiny, structured lexer-only prototype for MeowLang.
+
+## Build (manual, Linux/macOS)
+
+g++ src/*.cpp -o meow
+
+## Build (manual, Windows MinGW)
+
+g++ src/*.cpp -o meow.exe
+
+## Build (CMake)
+
+cmake -S . -B build
+cmake --build build
+
+## Run (Linux/macOS)
+
+./meow examples/hello.meow
+
+## Run (Windows)
+
+.\build\meow.exe examples\hello.meow
+
+## Public release (GitHub)
+
+1. Ensure generated binaries are not tracked in git:
+   git rm --cached meow meow-lang.deb meow-lang_1.0_amd64.snap meow-lang/usr/bin/meow
+   git commit -m "chore: stop tracking generated release binaries"
+
+2. Push your latest main branch changes.
+
+3. Create and push a version tag:
+   git tag v1.0.0
+   git push origin v1.0.0
+
+4. The GitHub Actions workflow `.github/workflows/release.yml` will:
+   - build MeowLang on Windows and Linux
+   - package archives into `dist/`
+   - publish a GitHub Release with attached artifacts
+
+### Local packaging (optional)
+
+- Windows:
+  powershell -ExecutionPolicy Bypass -File scripts/package_windows.ps1 -Version v1.0.0
+
+- Linux:
+  bash scripts/package_linux.sh v1.0.0
+
+
+============================================================
+4) HOW THE LANGUAGE WORKS (DETAILED DESCRIPTION)
+============================================================
+
+A) PHASES
+1. CLI entry and source loading
+   - main.cpp parses args, reads file (or REPL input).
+2. Lexing
+   - Lexer converts raw source text into a vector of tokens.
+3. Parsing
+   - Parser consumes tokens and builds AST nodes.
+4. Compilation
+   - Compiler lowers AST into bytecode instructions.
+5. Execution
+   - VM executes bytecode on a stack machine and prints results.
+
+Pipeline summary:
+source code -> Lexer::tokenize() -> Parser::parse() -> Compiler::compile() -> VM::run() -> stdout
+
+B) MAIN COMPONENTS AND INTERACTION
+1. main.cpp
+   - Coordinates everything through compileSource().
+   - runFile() handles file mode with try/catch.
+   - runRepl() loops input lines, compiles and runs each line.
+2. token.h
+   - Defines TokenType enum and Token struct.
+3. lexer.cpp
+   - Scans chars with peek()/advance().
+   - Produces keywords, identifiers, literals, operators, symbols.
+   - Appends END_OF_FILE token.
+4. ast.h
+   - Expression nodes: LiteralExpr, VariableExpr, BinaryExpr, UnaryExpr.
+   - Statement nodes: PrintStmt, VarDeclStmt, ExprStmt, BlockStmt, IfStmt.
+5. parser.cpp
+   - Recursive descent parser with precedence layers.
+   - Builds AST from tokens.
+6. bytecode.h
+   - Defines OpCode and Instruction.
+7. compiler.cpp
+   - Traverses AST and emits bytecode sequence.
+   - Emits HALT at end.
+8. vm.cpp
+   - Stack-based interpreter for emitted instructions.
+
+Interaction chain in code:
+main.cpp::compileSource()
+  -> Lexer lexer(source)
+  -> lexer.tokenize()
+  -> Parser parser(tokens)
+  -> parser.parse()
+  -> Compiler compiler
+  -> compiler.compile(ast)
+  -> VM.loadProgram(bytecode)
+  -> VM.run()
+
+C) INTERESTING CONTROL FLOWS
+1. Expression precedence recursion
+   - assignment() -> logicalOr() -> logicalAnd() -> equality() -> comparison() -> term() -> factor() -> unary() -> primary()
+   - This is a key recursive flow for diagrams.
+2. If statement compilation and jump patching
+   - compile condition
+   - emit JUMP_IF_FALSE with placeholder operand
+   - compile then-branch
+   - patch jump operand to point after then-branch
+3. VM instruction pointer control
+   - Normal instructions increment ip
+   - JUMP and JUMP_IF_FALSE set ip directly and continue loop
+4. REPL control loop
+   - while true read line
+   - exit/quit terminates
+   - per-line compile+run with exception handling
+
+D) EVALUATION STRATEGY
+1. Compiler emits stack-machine instructions.
+2. VM executes eagerly (no lazy evaluation).
+3. Binary expressions compile left then right, then op (stack order matters).
+4. Values are stored internally as strings in VM stack/variables.
+5. Numeric and bool coercions happen at runtime in VM::toNumber and VM::toBool.
+
+E) ERROR HANDLING PATHS (FOR DIAGRAMS)
+1. File read errors
+   - readFile() throws runtime_error if cannot open file.
+   - runFile() catches and prints "Error: ...", returns 1.
+2. Parse errors
+   - parser throws runtime_error on unexpected token.
+   - caught in runFile() or runRepl() and printed.
+3. VM runtime errors
+   - pop() throws on stack underflow.
+   - stod/stoi may throw conversion errors.
+   - caught at top-level runFile()/runRepl() boundaries.
+4. REPL continues after error
+   - runRepl() catches per line and continues loop.
+
+F) CURRENT LANGUAGE FEATURES
+1. Types: int, deci, bool, char, string
+2. Literals: integer, decimal, string, char, true/false
+3. Statements: variable declaration, expression statement, print, if, block
+4. Operators: + - * / % == != < <= > >= && || ! =
+5. Print syntax: meow << expression;
+
+G) CURRENT LIMITATIONS
+1. No else branch implementation in AST/compiler flow despite ELSE token existing.
+2. No loops (for/while).
+3. No functions or function calls.
+4. No scoped environments (single VM variable map).
+5. LOAD_VAR currently allows missing variables to resolve to empty string via map access.
+6. Parser uses permissive match calls, so some malformed syntax may fail late.
+
+
+============================================================
+5) EXAMPLE PROGRAMS (COPY-PASTE)
+============================================================
+
+-------------------- FILE: examples/hello.meow --------------------
+meow << "Hello world";
+
+int x = 10;
+deci y = 3.14;
+bool flag = true;
+char c = 'A';
+string name = "MeowLang";
+
+int result = (x + 5) * 2;
+
+if (x > 5) {
+    meow << name;
+}
+
+-------------------- FILE: examples/if.meow --------------------
+int a = 6;
+int b = 9;
+
+if(a>b){
+    meow<<"wow";
+}
+
+
+============================================================
+6) INPUT HINTS FOR MERMAID WORKFLOW DIAGRAMS
+============================================================
+You can generate these diagrams directly from this file:
+1. End-to-end pipeline diagram
+   - CLI -> Read file -> Lexer -> Parser -> AST -> Compiler -> Bytecode -> VM -> Output
+2. Module data-flow diagram
+   - Show data shape transitions (string -> tokens -> AST -> instructions -> stack/variables)
+3. Error-path diagram
+   - Read error, parse error, runtime error, REPL recover path
+4. Parser recursion diagram
+   - expression precedence call graph
+5. If compilation/execution control-flow diagram
+   - JUMP_IF_FALSE patching and VM branch behavior
+
+END OF FILE
